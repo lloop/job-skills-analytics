@@ -4,6 +4,8 @@ from dataclasses import dataclass
 
 from playwright.sync_api import Page
 
+from config import SiteConfig
+
 
 @dataclass
 class JobPosting:
@@ -16,16 +18,22 @@ class JobPosting:
     url: str
 
 
-def parse_job_posting(page: Page) -> JobPosting:
-    """Extract a posting from the current page.
-
-    Selectors are intentionally kept local so they can be adapted to a target job board.
-    """
+def parse_job_posting(page: Page, site: SiteConfig | None = None) -> JobPosting:
+    """Extract a posting using a site profile or generic fallback selectors."""
+    selectors = site or SiteConfig(
+        name="generic",
+        listing_url="",
+        job_link_selector="a[data-job-link], a.job-link",
+        title_selector="[data-job-title], h1",
+        company_selector="[data-company], .company",
+        salary_selector="[data-salary], .salary",
+        description_selector="[data-description], .description, main",
+    )
     return JobPosting(
-        title=page.locator("[data-job-title], h1").first.inner_text().strip(),
-        company=page.locator("[data-company], .company").first.inner_text().strip(),
-        salary=_optional_text(page, "[data-salary], .salary"),
-        description=page.locator("[data-description], .description, main").first.inner_text().strip(),
+        title=page.locator(selectors.title_selector).first.inner_text().strip(),
+        company=page.locator(selectors.company_selector).first.inner_text().strip(),
+        salary=_optional_text(page, selectors.salary_selector),
+        description=page.locator(selectors.description_selector).first.inner_text().strip(),
         url=page.url,
     )
 
