@@ -13,3 +13,5 @@ CREATE TABLE IF NOT EXISTS job_skills (
     skill TEXT NOT NULL,
     PRIMARY KEY (job_id, skill)
 );
+
+CREATE INDEX IF NOT EXISTS idx_job_skills_skill ON job_skills(skill);
