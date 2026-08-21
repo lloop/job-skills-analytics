@@ -62,10 +62,14 @@ def collect_postings(
 
 
 def _job_urls(page: Page, site: SiteConfig) -> list[str]:
-    """Return normalized posting URLs currently visible in the listing."""
+    """Return normalized posting URLs currently visible in the listing.
+
+    RemoteOK stores the canonical posting path on each job row's ``data-href``.
+    Supporting ``href`` as a fallback keeps profiles for other job boards usable.
+    """
     urls: list[str] = []
-    for link in page.locator(site.job_link_selector).all():
-        href = link.get_attribute("href")
+    for job_element in page.locator(site.job_link_selector).all():
+        href = job_element.get_attribute("data-href") or job_element.get_attribute("href")
         if href:
             urls.append(urljoin(page.url, href))
     return list(dict.fromkeys(urls))

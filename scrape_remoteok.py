@@ -30,6 +30,7 @@ def main() -> None:
                 if index + 1 >= args.limit:
                     break
         finally:
+            page.pause()
             context.close()
             browser.close()
 

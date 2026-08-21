@@ -28,11 +28,13 @@ SCROLL_PAUSE_SECONDS = 1.0
 REQUEST_TIMEOUT_MS = 30_000
 DATABASE_PATH = "jobs.sqlite3"
 
+
+
 SITE_CONFIGS = {
 	"remoteok": SiteConfig(
 		name="Remote OK",
 		listing_url="https://remoteok.com/remote-dev-jobs",
-		job_link_selector="tr.job a.preventLink, tr.job h2 a, tr.job a[href*='/remote-jobs/']",
+		job_link_selector="tr.job[data-href]",
 		title_selector="h1, .position h1, [data-job-title]",
 		company_selector=".company, [data-company], .company-name",
 		salary_selector=".salary, [data-salary]",
