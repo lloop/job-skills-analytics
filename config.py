@@ -34,9 +34,9 @@ SITE_CONFIGS = {
 	"remoteok": SiteConfig(
 		name="Remote OK",
 		listing_url="https://remoteok.com/remote-dev-jobs",
-		job_link_selector="tr.job[data-href]",
-		title_selector="h1, .position h1, [data-job-title]",
-		company_selector=".company, [data-company], .company-name",
+		job_link_selector="td.company.position.company_and_position a.preventLink[href]",
+		title_selector='h2[itemprop="title"]',
+		company_selector='h3[itemprop="name"]',
 		salary_selector=".salary, [data-salary]",
 		description_selector=".description, [data-description], main",
 		listing_ready_selector="tr.job",
