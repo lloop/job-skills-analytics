@@ -39,7 +39,7 @@ SITE_CONFIGS = {
 		company_selector='h3[itemprop="name"]',
 		salary_selector=".salary, [data-salary]",
 		description_selector=".description, [data-description], main",
-		listing_ready_selector="tr.job",
+		listing_ready_selector="tr.job[data-href]",
 		detail_ready_selector="h1, .position h1, [data-job-title]",
 	),
 }

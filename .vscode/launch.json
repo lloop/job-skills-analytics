@@ -9,7 +9,7 @@
             "name": "Debug Scraper (--headed)",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/scrape_remoteok.py",
+            "program": "${workspaceFolder}/main.py",
             "args": ["--headed", "--max-pages", "1"],
             "console": "integratedTerminal",
             "justMyCode": true

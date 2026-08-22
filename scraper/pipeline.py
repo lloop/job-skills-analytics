@@ -48,7 +48,11 @@ def collect_postings(
                     timeout=REQUEST_TIMEOUT_MS,
                 )
                 _wait_for_selector(detail_page, site.detail_ready_selector)
-                yield parse_job_posting(detail_page, site)
+                posting = parse_job_posting(detail_page, site)
+                if posting:
+                    yield posting
+            except Exception as err:
+                print(f"[WARNING] Failed to scrape {posting_url}: {err}")
             finally:
                 detail_page.close()
 
@@ -59,19 +63,18 @@ def collect_postings(
             continue
         if not _load_more_results(page, site, links_before):
             break
-
-
+        
 def _job_urls(page: Page, site: SiteConfig) -> list[str]:
-    """Return normalized posting URLs currently visible in the listing.
+    """Return normalized posting URLs currently visible in the listing."""
 
-    RemoteOK stores the canonical posting path on each job row's ``data-href``.
-    Supporting ``href`` as a fallback keeps profiles for other job boards usable.
-    """
     urls: list[str] = []
-    for job_element in page.locator(site.job_link_selector).all():
-        href = job_element.get_attribute("data-href") or job_element.get_attribute("href")
+
+    for job_element in page.locator("tr.job[data-href]").all():
+        href = job_element.get_attribute("data-href")
+        
         if href:
             urls.append(urljoin(page.url, href))
+
     return list(dict.fromkeys(urls))
 
 
@@ -102,7 +105,7 @@ def _load_more_results(page: Page, site: SiteConfig, previous_urls: list[str]) -
         page.wait_for_function(
             """([selector, previousCount]) =>
             document.querySelectorAll(selector).length > previousCount""",
-            [site.job_link_selector, len(previous_urls)],
+            arg=[site.job_link_selector, len(previous_urls)],
             timeout=REQUEST_TIMEOUT_MS,
         )
     except PlaywrightTimeoutError:

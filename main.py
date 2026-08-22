@@ -1,4 +1,4 @@
-"""Run a small RemoteOK scrape from the command line."""
+"""Run a small scrape from the command line."""
 
 import argparse
 
@@ -10,7 +10,7 @@ from scraper.pipeline import collect_postings
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Scrape job postings from RemoteOK")
+    parser = argparse.ArgumentParser(description="Scrape job postings")
     parser.add_argument("--max-pages", type=int, default=1)
     parser.add_argument("--limit", type=int, default=5)
     parser.add_argument("--headed", action="store_true", help="Show the browser window")
@@ -20,7 +20,7 @@ def main() -> None:
     with sync_playwright() as playwright:
         browser, context = create_browser_context(playwright, headless=not args.headed)
         try:
-            page = context.new_page()
+            page = context.new_page()           
             postings = collect_postings(page, site=site, max_pages=args.max_pages)
             for index, posting in enumerate(postings):
                 print(f"{index + 1}. {posting.title} | {posting.company}")
@@ -30,7 +30,8 @@ def main() -> None:
                 if index + 1 >= args.limit:
                     break
         finally:
-            page.pause()
+            # page.pause()
+            postings.close()
             context.close()
             browser.close()
 
