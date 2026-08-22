@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 
+from pathlib import Path
 
 @dataclass(frozen=True)
 class SiteConfig:
@@ -14,10 +15,12 @@ class SiteConfig:
 	company_selector: str
 	salary_selector: str
 	description_selector: str
+	tags_selector: str
 	listing_ready_selector: str | None = None
 	detail_ready_selector: str | None = None
 	next_page_selector: str | None = None
 	max_pages: int = 5
+
 
 
 SEARCH_TERMS = ["Python", "SQL", "Data Analyst"]
@@ -26,9 +29,10 @@ ACTIVE_SITE = "remoteok"
 MAX_PAGES = 5
 SCROLL_PAUSE_SECONDS = 1.0
 REQUEST_TIMEOUT_MS = 30_000
-DATABASE_PATH = "jobs.sqlite3"
+DATABASE_PATH = "output/jobs.sqlite3"
 
-
+# Project Root Directory (assumes config.py is in project root)
+BASE_DIR = Path(__file__).parent.resolve()
 
 SITE_CONFIGS = {
 	"remoteok": SiteConfig(
@@ -41,6 +45,7 @@ SITE_CONFIGS = {
 		description_selector=".description, [data-description], main",
 		listing_ready_selector="tr.job[data-href]",
 		detail_ready_selector="h1, .position h1, [data-job-title]",
+  		tags_selector=".action-add-tag h3, .tag h3"
 	),
 }
 
