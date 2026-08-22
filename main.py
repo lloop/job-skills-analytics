@@ -13,7 +13,6 @@ def main() -> None:
     parser.add_argument("--max-pages", type=int, default=1)
     parser.add_argument("--limit", type=int, default=5)
     parser.add_argument("--headed", action="store_true", help="Show the browser window")
-    # parser.add_argument("--db-path", type=str, default="jobs.db", help="Path to SQLite database")
     parser.add_argument(
         "--db-path", 
         type=str, 
@@ -31,10 +30,15 @@ def main() -> None:
             
             # Pull postings up to the specified limit
             postings_to_save = []
-            for index, posting in enumerate(postings_generator):
-                postings_to_save.append(posting)
-                if index + 1 >= args.limit:
-                    break
+            
+            try:
+                for index, posting in enumerate(postings_generator):
+                    postings_to_save.append(posting)
+                    if index + 1 >= args.limit:
+                        break
+            finally:
+                # Forces detail_page.close() to run while Playwright is still active
+                postings_generator.close()
 
             # --- PRINT LOGIC COMMENTED OUT ---
             # for index, posting in enumerate(postings):

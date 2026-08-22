@@ -1,0 +1,141 @@
+import unittest
+from database.db_manager import DatabaseManager, _posting_values
+from scraper.parser import JobPosting
+
+
+class TestDatabaseManager(unittest.TestCase):
+
+    def setUp(self) -> None:
+        """Instantiate an in-memory database for isolation."""
+        self.db = DatabaseManager(":memory:")
+
+        self.sample_posting = JobPosting(
+            title="Backend Engineer",
+            company="TechCorp",
+            salary="$120,000",
+            description="Build scalable APIs.",
+            url="https://example.com/job/1",
+            tags=("python", "docker"),
+        )
+
+    def tearDown(self) -> None:
+        """Close the database connection after each test."""
+        self.db.close()
+
+    def test_schema_initialization(self) -> None:
+        """Verify job_postings, job_skills, and index are initialized."""
+        cursor = self.db.connection.cursor()
+        cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;"
+        )
+        tables = [row["name"] for row in cursor.fetchall()]
+
+        self.assertIn("job_postings", tables)
+        self.assertIn("job_skills", tables)
+
+    def test_upsert_posting_inserts_new_record_and_skills(self) -> None:
+        """Verify inserting a new posting saves posting and skill records."""
+        job_id = self.db.upsert_posting(self.sample_posting, skills=["python", "docker", ""])
+
+        self.assertIsInstance(job_id, int)
+
+        # Check job posting record
+        row = self.db.fetch_posting("https://example.com/job/1")
+        self.assertIsNotNone(row)
+        self.assertEqual(row["title"], "Backend Engineer")
+        self.assertEqual(row["company"], "TechCorp")
+
+        # Check skills table (empty skill "" should be ignored)
+        cursor = self.db.connection.execute(
+            "SELECT skill FROM job_skills WHERE job_id = ? ORDER BY skill", (job_id,)
+        )
+        skills = [r["skill"] for r in cursor.fetchall()]
+        self.assertEqual(skills, ["docker", "python"])
+
+    def test_upsert_posting_updates_existing_record_and_replaces_skills(self) -> None:
+        """Verify ON CONFLICT(url) updates posting details and replaces old skills."""
+        job_id_1 = self.db.upsert_posting(self.sample_posting, skills=["python", "flask"])
+
+        updated_posting = JobPosting(
+            title="Senior Backend Engineer",
+            company="TechCorp",
+            salary="$140,000",
+            description="Build scalable microservices.",
+            url="https://example.com/job/1",
+            tags=("python", "fastapi"),
+        )
+
+        job_id_2 = self.db.upsert_posting(updated_posting, skills=["python", "fastapi"])
+
+        # IDs should match
+        self.assertEqual(job_id_1, job_id_2)
+
+        # Record should be updated
+        row = self.db.fetch_posting("https://example.com/job/1")
+        self.assertEqual(row["title"], "Senior Backend Engineer")
+        self.assertEqual(row["salary"], "$140,000")
+
+        # Skills should be replaced with new set
+        cursor = self.db.connection.execute(
+            "SELECT skill FROM job_skills WHERE job_id = ? ORDER BY skill", (job_id_2,)
+        )
+        skills = [r["skill"] for r in cursor.fetchall()]
+        self.assertEqual(skills, ["fastapi", "python"])
+
+    def test_upsert_postings_batch(self) -> None:
+        """Verify batch upserting multiple postings."""
+        posting2 = JobPosting(
+            title="Frontend Engineer",
+            company="DesignCo",
+            salary=None,
+            description="Build UI components.",
+            url="https://example.com/job/2",
+        )
+
+        batch = [
+            (self.sample_posting, ["python"]),
+            (posting2, ["react", "typescript"]),
+        ]
+
+        processed_count = self.db.upsert_postings(batch)
+        self.assertEqual(processed_count, 2)
+
+        cursor = self.db.connection.execute("SELECT COUNT(*) as count FROM job_postings")
+        self.assertEqual(cursor.fetchone()["count"], 2)
+
+    def test_context_manager(self) -> None:
+        """Verify DatabaseManager functions as a context manager."""
+        with DatabaseManager(":memory:") as db:
+            job_id = db.upsert_posting(self.sample_posting, skills=["python"])
+            self.assertGreater(job_id, 0)
+
+    def test_posting_values_dict_and_object_support(self) -> None:
+        """Verify _posting_values extracts values from dataclasses/objects and dicts."""
+        # Test object/dataclass
+        obj_res = _posting_values(self.sample_posting)
+        self.assertEqual(obj_res["title"], "Backend Engineer")
+
+        # Test dictionary mapping
+        dict_input = {
+            "title": " Data Scientist ",
+            "company": " DataInc ",
+            "salary": None,
+            "description": " ML models ",
+            "url": " https://example.com/job/3 ",
+        }
+        dict_res = _posting_values(dict_input)
+        self.assertEqual(dict_res["title"], "Data Scientist")
+        self.assertIsNone(dict_res["salary"])
+
+    def test_posting_values_raises_value_error_on_missing_fields(self) -> None:
+        """Verify _posting_values raises ValueError when required fields are missing."""
+        invalid_posting = {"title": "Engineer", "company": "Co"}  # missing url & description
+
+        with self.assertRaises(ValueError) as ctx:
+            _posting_values(invalid_posting)
+
+        self.assertIn("Posting is missing required fields", str(ctx.exception))
+
+
+if __name__ == "__main__":
+    unittest.main()

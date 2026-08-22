@@ -7,6 +7,11 @@ from .parser import JobPosting
 
 def init_db(db_path: str | Path = DATABASE_PATH) -> None:
     """Initialize relational SQLite database schema for postings and skills."""
+    
+    path = Path(db_path)
+    # Ensure directory exists before connecting
+    path.parent.mkdir(parents=True, exist_ok=True)
+    
     with sqlite3.connect(db_path) as conn:
         conn.execute("PRAGMA foreign_keys = ON;")
         conn.executescript(

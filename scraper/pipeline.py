@@ -8,6 +8,7 @@ from playwright.sync_api import Page, TimeoutError as PlaywrightTimeoutError
 from config import REQUEST_TIMEOUT_MS, SCROLL_PAUSE_SECONDS
 from config import SiteConfig, get_site_config
 from .parser import JobPosting, parse_job_posting
+from collections.abc import Generator
 
 
 def collect_postings(
@@ -16,7 +17,7 @@ def collect_postings(
     *,
     max_pages: int | None = None,
     site: SiteConfig | None = None,
-) -> Iterable[JobPosting]:
+) -> Generator[JobPosting, None, None]:
     """Collect unique postings from a configured listing.
 
     Each iteration is treated as one listing page or dynamically loaded batch. A
