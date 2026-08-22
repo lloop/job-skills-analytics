@@ -18,13 +18,13 @@ CREATE TABLE IF NOT EXISTS job_postings (
     collected_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS job_skills (
+CREATE TABLE IF NOT EXISTS posting_skills (
     job_id INTEGER NOT NULL REFERENCES job_postings(id) ON DELETE CASCADE,
     skill TEXT NOT NULL,
     PRIMARY KEY (job_id, skill)
 );
 
-CREATE INDEX IF NOT EXISTS idx_job_skills_skill ON job_skills(skill);
+CREATE INDEX IF NOT EXISTS idx_posting_skills_skill ON posting_skills(skill);
 """
 
 
@@ -96,12 +96,80 @@ class DatabaseManager:
         return int(cursor.fetchone()["id"])
 
     def _replace_skills(self, job_id: int, skills: Iterable[str]) -> None:
-        self.connection.execute("DELETE FROM job_skills WHERE job_id = ?", (job_id,))
+        self.connection.execute("DELETE FROM posting_skills WHERE job_id = ?", (job_id,))
         unique_skills = {(skill.strip(),) for skill in skills if skill and skill.strip()}
         self.connection.executemany(
-            "INSERT INTO job_skills (job_id, skill) VALUES (?, ?)",
+            "INSERT INTO posting_skills (job_id, skill) VALUES (?, ?)",
             [(job_id, skill) for skill, in unique_skills],
         )
+            
+    def get_skill_co_occurrences(self, min_count: int = 2) -> list[sqlite3.Row]:
+        """Fetch raw co-occurrence counts for skill pairs appearing together at least `min_count` times."""
+        query = """
+            SELECT 
+                s1.skill AS skill_a, 
+                s2.skill AS skill_b, 
+                COUNT(*) AS pair_count
+            FROM posting_skills s1
+            JOIN posting_skills s2 
+                ON s1.job_id = s2.job_id 
+                AND s1.skill < s2.skill
+            GROUP BY s1.skill, s2.skill
+            HAVING pair_count >= ?
+            ORDER BY pair_count DESC;
+        """
+        return self.connection.execute(query, (min_count,)).fetchall()
+
+    def get_normalized_co_occurrences(self, min_count: int = 2) -> list[dict[str, Any]]:
+        """Calculate Jaccard Similarity weights between skill pairs.
+        
+        Jaccard = Count(A ∩ B) / (Count(A) + Count(B) - Count(A ∩ B))
+        """
+        query = """
+            WITH skill_counts AS (
+                SELECT skill, COUNT(*) AS total_count
+                FROM posting_skills
+                GROUP BY skill
+            ),
+            pair_counts AS (
+                SELECT 
+                    s1.skill AS skill_a, 
+                    s2.skill AS skill_b, 
+                    COUNT(*) AS intersection_count
+                FROM posting_skills s1
+                JOIN posting_skills s2 
+                    ON s1.job_id = s2.job_id 
+                    AND s1.skill < s2.skill
+                GROUP BY s1.skill, s2.skill
+                HAVING intersection_count >= ?
+            )
+            SELECT 
+                p.skill_a,
+                p.skill_b,
+                p.intersection_count,
+                ca.total_count AS count_a,
+                cb.total_count AS count_b,
+                ROUND(
+                    CAST(p.intersection_count AS REAL) / 
+                    (ca.total_count + cb.total_count - p.intersection_count), 4
+                ) AS jaccard_index
+            FROM pair_counts p
+            JOIN skill_counts ca ON p.skill_a = ca.skill
+            JOIN skill_counts cb ON p.skill_b = cb.skill
+            ORDER BY jaccard_index DESC;
+        """
+        cursor = self.connection.execute(query, (min_count,))
+        return [dict(row) for row in cursor.fetchall()]
+
+    def get_network_edge_list(self, min_jaccard: float = 0.1) -> list[tuple[str, str, float]]:
+        """Return an edge list format (source, target, weight) ready for NetworkX graphs."""
+        co_occurrences = self.get_normalized_co_occurrences(min_count=1)
+        return [
+            (row["skill_a"], row["skill_b"], row["jaccard_index"])
+            for row in co_occurrences
+            if row["jaccard_index"] >= min_jaccard
+        ]
+
 
 
 def _posting_values(posting: Any) -> dict[str, str | None]:
@@ -122,70 +190,3 @@ def _posting_values(posting: Any) -> dict[str, str | None]:
     if missing:
         raise ValueError(f"Posting is missing required fields: {', '.join(missing)}")
     return {key: None if value is None else str(value).strip() for key, value in values.items()}
-
-def get_skill_co_occurrences(self, min_count: int = 2) -> list[sqlite3.Row]:
-    """Fetch raw co-occurrence counts for skill pairs appearing together at least `min_count` times."""
-    query = """
-        SELECT 
-            s1.skill AS skill_a, 
-            s2.skill AS skill_b, 
-            COUNT(*) AS pair_count
-        FROM job_skills s1
-        JOIN job_skills s2 
-            ON s1.job_id = s2.job_id 
-            AND s1.skill < s2.skill
-        GROUP BY s1.skill, s2.skill
-        HAVING pair_count >= ?
-        ORDER BY pair_count DESC;
-    """
-    return self.connection.execute(query, (min_count,)).fetchall()
-
-def get_normalized_co_occurrences(self, min_count: int = 2) -> list[dict[str, Any]]:
-    """Calculate Jaccard Similarity weights between skill pairs.
-    
-    Jaccard = Count(A ∩ B) / (Count(A) + Count(B) - Count(A ∩ B))
-    """
-    query = """
-        WITH skill_counts AS (
-            SELECT skill, COUNT(*) AS total_count
-            FROM job_skills
-            GROUP BY skill
-        ),
-        pair_counts AS (
-            SELECT 
-                s1.skill AS skill_a, 
-                s2.skill AS skill_b, 
-                COUNT(*) AS intersection_count
-            FROM job_skills s1
-            JOIN job_skills s2 
-                ON s1.job_id = s2.job_id 
-                AND s1.skill < s2.skill
-            GROUP BY s1.skill, s2.skill
-            HAVING intersection_count >= ?
-        )
-        SELECT 
-            p.skill_a,
-            p.skill_b,
-            p.intersection_count,
-            ca.total_count AS count_a,
-            cb.total_count AS count_b,
-            ROUND(
-                CAST(p.intersection_count AS REAL) / 
-                (ca.total_count + cb.total_count - p.intersection_count), 4
-            ) AS jaccard_index
-        FROM pair_counts p
-        JOIN skill_counts ca ON p.skill_a = ca.skill
-        JOIN skill_counts cb ON p.skill_b = cb.skill
-        ORDER BY jaccard_index DESC;
-    """
-    cursor = self.connection.execute(query, (min_count,))
-    return [dict(row) for row in cursor.fetchall()]
-
-def get_network_edge_list(self, min_jaccard: float = 0.1) -> list[tuple[str, str, float]]:
-    """Return an edge list format (source, target, weight) ready for NetworkX graphs."""
-    co_occurrences = self.get_normalized_co_occurrences(min_count=1)
-    return [
-        (row["skill_a"], row["skill_b"], row["jaccard_index"])
-        for row in co_occurrences
-        if row["jaccard_index"] >= min_jaccard
-    ]

@@ -23,7 +23,7 @@ class TestDatabaseManager(unittest.TestCase):
         self.db.close()
 
     def test_schema_initialization(self) -> None:
-        """Verify job_postings, job_skills, and index are initialized."""
+        """Verify job_postings, posting_skills, and index are initialized."""
         cursor = self.db.connection.cursor()
         cursor.execute(
             "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;"
@@ -31,7 +31,7 @@ class TestDatabaseManager(unittest.TestCase):
         tables = [row["name"] for row in cursor.fetchall()]
 
         self.assertIn("job_postings", tables)
-        self.assertIn("job_skills", tables)
+        self.assertIn("posting_skills", tables)
 
     def test_upsert_posting_inserts_new_record_and_skills(self) -> None:
         """Verify inserting a new posting saves posting and skill records."""
@@ -47,7 +47,7 @@ class TestDatabaseManager(unittest.TestCase):
 
         # Check skills table (empty skill "" should be ignored)
         cursor = self.db.connection.execute(
-            "SELECT skill FROM job_skills WHERE job_id = ? ORDER BY skill", (job_id,)
+            "SELECT skill FROM posting_skills WHERE job_id = ? ORDER BY skill", (job_id,)
         )
         skills = [r["skill"] for r in cursor.fetchall()]
         self.assertEqual(skills, ["docker", "python"])
@@ -77,7 +77,7 @@ class TestDatabaseManager(unittest.TestCase):
 
         # Skills should be replaced with new set
         cursor = self.db.connection.execute(
-            "SELECT skill FROM job_skills WHERE job_id = ? ORDER BY skill", (job_id_2,)
+            "SELECT skill FROM posting_skills WHERE job_id = ? ORDER BY skill", (job_id_2,)
         )
         skills = [r["skill"] for r in cursor.fetchall()]
         self.assertEqual(skills, ["fastapi", "python"])
@@ -135,6 +135,35 @@ class TestDatabaseManager(unittest.TestCase):
             _posting_values(invalid_posting)
 
         self.assertIn("Posting is missing required fields", str(ctx.exception))
+        
+    def test_get_normalized_co_occurrences(self) -> None:
+        """Verify Jaccard index calculation for co-occurring skills."""
+        # Setup: Job 1 has (python, docker, aws), Job 2 has (python, docker)
+        p1 = JobPosting("Dev 1", "Co1", None, "Desc", "https://ex.com/1")
+        p2 = JobPosting("Dev 2", "Co2", None, "Desc", "https://ex.com/2")
+
+        self.db.upsert_posting(p1, skills=["python", "docker", "aws"])
+        self.db.upsert_posting(p2, skills=["python", "docker"])
+
+        # Execution
+        results = self.db.get_normalized_co_occurrences(min_count=1)
+
+        # 'docker' and 'python' both appear in 2 postings together
+        # Jaccard = 2 / (2 + 2 - 2) = 1.0
+        top_pair = next(
+            r for r in results 
+            if set([r["skill_a"], r["skill_b"]]) == {"docker", "python"}
+        )
+        self.assertEqual(top_pair["intersection_count"], 2)
+        self.assertEqual(top_pair["jaccard_index"], 1.0)
+
+        # 'aws' and 'python': Intersection = 1, Total(aws)=1, Total(python)=2
+        # Jaccard = 1 / (1 + 2 - 1) = 0.5
+        aws_python_pair = next(
+            r for r in results 
+            if set([r["skill_a"], r["skill_b"]]) == {"aws", "python"}
+        )
+        self.assertEqual(aws_python_pair["jaccard_index"], 0.5)
 
 
 if __name__ == "__main__":

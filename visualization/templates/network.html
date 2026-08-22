@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Skill Co-Occurrence Network</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    :root {
+      --bg-color: #0f172a;
+      --card-bg: #1e293b;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent-color: #38bdf8;
+      --border-color: #334155;
+    }
+
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, sans-serif;
+      background: var(--bg-color);
+      color: var(--text-main);
+      overflow: hidden;
+    }
+
+    #app { display: flex; width: 100vw; height: 100vh; }
+    #graph-container { flex: 1; height: 100%; position: relative; }
+
+    /* Control Panel Overlay */
+    .controls-overlay {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      background: rgba(30, 41, 59, 0.85);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--border-color);
+      padding: 16px;
+      border-radius: 8px;
+      width: 260px;
+      z-index: 10;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+
+    .controls-overlay h2 {
+      margin: 0 0 12px 0;
+      font-size: 1rem;
+      color: var(--accent-color);
+    }
+
+    .control-group { margin-bottom: 12px; }
+    .control-group label { display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px; }
+    .control-group input[type="text"], .control-group input[type="range"] {
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .control-group input[type="text"] {
+      background: #0f172a;
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      padding: 6px 10px;
+      border-radius: 4px;
+    }
+
+    /* Side Details Drawer */
+    #details-drawer {
+      width: 320px;
+      background: var(--card-bg);
+      border-left: 1px solid var(--border-color);
+      padding: 24px;
+      box-sizing: border-box;
+      display: none;
+      flex-direction: column;
+      z-index: 20;
+    }
+    #details-drawer.active { display: flex; }
+    #details-drawer h3 { margin-top: 0; color: var(--accent-color); }
+    .stat-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.9rem; }
+    .stat-label { color: var(--text-muted); }
+    .stat-value { font-weight: bold; }
+    .connected-list { list-style: none; padding: 0; margin-top: 12px; }
+    .connected-list li {
+      padding: 6px 10px;
+      background: #0f172a;
+      margin-bottom: 4px;
+      border-radius: 4px;
+      font-size: 0.85rem;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    /* SVG Elements */
+    .links line { stroke: #475569; stroke-opacity: 0.6; }
+    .nodes circle { cursor: pointer; transition: r 0.2s, stroke 0.2s; }
+    .nodes text { fill: var(--text-main); font-size: 11px; pointer-events: none; }
+    .dimmed { opacity: 0.15; }
+    .highlighted { stroke: #f59e0b !important; stroke-width: 3px !important; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="graph-container">
+      <div class="controls-overlay">
+        <h2>Skill Graph Explorer</h2>
+        <div class="control-group">
+          <label for="search-input">Search Skill</label>
+          <input type="text" id="search-input" placeholder="e.g. python, docker...">
+        </div>
+        <div class="control-group">
+          <label for="repulsion-slider">Node Repulsion (Force)</label>
+          <input type="range" id="repulsion-slider" min="-800" max="-50" value="-300">
+        </div>
+        <div class="control-group">
+          <label for="distance-slider">Link Distance</label>
+          <input type="range" id="distance-slider" min="30" max="250" value="100">
+        </div>
+      </div>
+    </div>
+
+    <div id="details-drawer">
+      <h3 id="drawer-title">Skill Details</h3>
+      <div class="stat-row">
+        <span class="stat-label">Connections:</span>
+        <span class="stat-value" id="drawer-connections">0</span>
+      </div>
+      <h4>Top Co-Occurring Skills</h4>
+      <ul class="connected-list" id="drawer-neighbors"></ul>
+    </div>
+  </div>
+
+  <script>
+    const width = document.getElementById("graph-container").clientWidth;
+    const height = document.getElementById("graph-container").clientHeight;
+
+    const colorScale = d3.scaleOrdinal(d3.schemeTableau10);
+
+    const svg = d3.select("#graph-container")
+      .append("svg")
+      .attr("width", width)
+      .attr("height", height);
+
+    const container = svg.append("g");
+
+    svg.call(d3.zoom().on("zoom", (event) => {
+      container.attr("transform", event.transform);
+    }));
+
+    d3.json("skills_graph.json").then(graph => {
+      const linkForce = d3.forceLink(graph.links).id(d => d.id).distance(100);
+      const chargeForce = d3.forceManyBody().strength(-300);
+
+      const simulation = d3.forceSimulation(graph.nodes)
+        .force("link", linkForce)
+        .force("charge", chargeForce)
+        .force("center", d3.forceCenter(width / 2, height / 2))
+        .force("collision", d3.forceCollide().radius(25));
+
+      const link = container.append("g")
+        .attr("class", "links")
+        .selectAll("line")
+        .data(graph.links)
+        .enter().append("line")
+        .attr("stroke-width", d => Math.max(d.value * 14, 1.5));
+
+      const node = container.append("g")
+        .attr("class", "nodes")
+        .selectAll("g")
+        .data(graph.nodes)
+        .enter().append("g")
+        .call(d3.drag()
+          .on("start", dragstarted)
+          .on("drag", dragged)
+          .on("end", dragended));
+
+      node.append("circle")
+        .attr("r", 9)
+        .attr("fill", d => colorScale(d.group || 1))
+        .attr("stroke", "#1e293b")
+        .attr("stroke-width", 1.5);
+
+      node.append("text")
+        .attr("x", 14)
+        .attr("y", 4)
+        .text(d => d.id);
+
+      // Click node to open details drawer
+      node.on("click", (event, d) => {
+        event.stopPropagation();
+        selectNode(d);
+      });
+
+      svg.on("click", resetSelection);
+
+      simulation.on("tick", () => {
+        link
+          .attr("x1", d => d.source.x)
+          .attr("y1", d => d.source.y)
+          .attr("x2", d => d.target.x)
+          .attr("y2", d => d.target.y);
+
+        node.attr("transform", d => `translate(${d.x},${d.y})`);
+      });
+
+      // Controls setup
+      d3.select("#repulsion-slider").on("input", function() {
+        simulation.force("charge").strength(+this.value);
+        simulation.alpha(0.3).restart();
+      });
+
+      d3.select("#distance-slider").on("input", function() {
+        simulation.force("link").distance(+this.value);
+        simulation.alpha(0.3).restart();
+      });
+
+      // Search functionality
+      d3.select("#search-input").on("input", function() {
+        const query = this.value.toLowerCase().trim();
+        if (!query) {
+          resetSelection();
+          return;
+        }
+        node.classed("dimmed", d => !d.id.toLowerCase().includes(query));
+        link.classed("dimmed", true);
+      });
+
+      function selectNode(d) {
+        const connectedEdges = graph.links.filter(l => l.source.id === d.id || l.target.id === d.id);
+        const neighborIds = new Set(connectedEdges.map(l => l.source.id === d.id ? l.target.id : l.source.id));
+        neighborIds.add(d.id);
+
+        node.classed("dimmed", n => !neighborIds.has(n.id));
+        node.select("circle").classed("highlighted", n => n.id === d.id);
+        link.classed("dimmed", l => l.source.id !== d.id && l.target.id !== d.id);
+
+        // Populate drawer
+        const drawer = d3.select("#details-drawer");
+        drawer.classed("active", true);
+        d3.select("#drawer-title").text(d.id);
+        d3.select("#drawer-connections").text(connectedEdges.length);
+
+        const neighborsList = d3.select("#drawer-neighbors");
+        neighborsList.html("");
+        connectedEdges
+          .sort((a, b) => b.value - a.value)
+          .forEach(l => {
+            const partner = l.source.id === d.id ? l.target.id : l.source.id;
+            neighborsList.append("li")
+              .html(`<span>${partner}</span><span style="color:var(--accent-color)">${(l.value * 100).toFixed(1)}%</span>`);
+          });
+      }
+
+      function resetSelection() {
+        node.classed("dimmed", false);
+        link.classed("dimmed", false);
+        node.select("circle").classed("highlighted", false);
+        d3.select("#details-drawer").classed("active", false);
+        d3.select("#search-input").property("value", "");
+      }
+
+      function dragstarted(event, d) {
+        if (!event.active) simulation.alphaTarget(0.3).restart();
+        d.fx = d.x; d.fy = d.y;
+      }
+      function dragged(event, d) { d.fx = event.x; d.fy = event.y; }
+      function dragended(event, d) {
+        if (!event.active) simulation.alphaTarget(0);
+        d.fx = null; d.fy = null;
+      }
+    });
+  </script>
+</body>
+</html>
