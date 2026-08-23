@@ -1,23 +1,21 @@
 """Parse structured fields from a job posting page."""
 
 from dataclasses import dataclass
-
 from playwright.sync_api import Page
-
 from config import SiteConfig
-
 from playwright.sync_api import Locator, Page
+from models import JobPosting
 
-@dataclass
-class JobPosting:
-    """Normalized job posting data."""
+# @dataclass
+# class JobPosting:
+#     """Normalized job posting data."""
 
-    title: str
-    company: str
-    salary: str | None
-    description: str
-    url: str
-    tags: tuple[str, ...] = ()
+#     title: str
+#     company: str
+#     salary: str | None
+#     description: str
+#     url: str
+#     tags: tuple[str, ...] = ()
 
 
 def parse_job_posting(page: Page, site: SiteConfig | None = None) -> JobPosting:

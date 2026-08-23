@@ -3,87 +3,37 @@
 <head>
   <meta charset="UTF-8">
   <title>Skill Co-occurrence Network</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
   <script src="https://d3js.org/d3.v7.min.js"></script>
-  <style>
-    body { margin: 0; padding: 0; overflow: hidden; background: #0f172a; color: #f8fafc; font-family: sans-serif; }
-    #controls { position: absolute; top: 15px; left: 15px; background: rgba(30, 41, 59, 0.9); padding: 12px; border-radius: 8px; z-index: 10; border: 1px solid #334155; }
-    svg { width: 100vw; height: 100vh; display: block; }
-    .links line { stroke: #64748b; stroke-opacity: 0.6; }
-    .nodes circle { fill: #38bdf8; stroke: #0284c7; stroke-width: 2px; }
-    .nodes text { fill: #f1f5f9; font-size: 12px; pointer-events: none; }
-  </style>
 </head>
 <body>
 
   <div id="controls">
-    <h3>Skill Network</h3>
-    <p id="status">Loading graph data...</p>
+    <h3>Skill Co-occurrence Network</h3>
+    <p id="status">Loading data...</p>
+    
+    <div class="slider-group">
+      <label for="jaccard-slider">Min Jaccard Threshold: <span id="jaccard-val">0.00</span></label>
+      <input type="range" id="jaccard-slider" min="0" max="0.5" step="0.02" value="0.00">
+    </div>
+
+    <div class="slider-group">
+      <label for="spacing-slider">Node Spacing: <span id="spacing-val">250</span></label>
+      <input type="range" id="spacing-slider" min="100" max="1000" step="50" value="250">
+    </div>
   </div>
 
+  <a id="source-card" href="{{ base_url }}" target="_blank" rel="noopener noreferrer">
+    <div class="card-icon">🌐</div>
+    <div class="card-info">
+      <span class="card-title">Data Source</span>
+      <span class="card-sub">Visit Scraped Site &rarr;</span>
+    </div>
+  </a>
+
+  <div id="tooltip"></div>
   <svg id="network-svg"></svg>
 
-  <script>
-    const width = window.innerWidth;
-    const height = window.innerHeight;
-    const svg = d3.select("#network-svg");
-
-    d3.json("/api/graph?min_jaccard=0.0").then(graph => {
-      const status = d3.select("#status");
-      
-      const links = graph.edges || graph.links || graph;
-      
-      if (!links || links.length === 0) {
-        status.text("No data returned from API.");
-        return;
-      }
-
-      // Extract unique nodes from source/target pairs if nodes array isn't provided directly
-      let nodes = graph.nodes;
-      if (!nodes) {
-        const nodeSet = new Set();
-        links.forEach(l => {
-          nodeSet.add(l.source);
-          nodeSet.add(l.target);
-        });
-        nodes = Array.from(nodeSet).map(id => ({ id }));
-      }
-
-      status.text(`Loaded ${nodes.length} skills & ${links.length} connections.`);
-
-      const simulation = d3.forceSimulation(nodes)
-        .force("link", d3.forceLink(links).id(d => d.id).distance(120))
-        .force("charge", d3.forceManyBody().strength(-300))
-        .force("center", d3.forceCenter(width / 2, height / 2));
-
-      const link = svg.append("g")
-        .attr("class", "links")
-        .selectAll("line")
-        .data(links)
-        .enter().append("line")
-        .attr("stroke-width", d => Math.max((d.value || d.weight || 1) * 5, 1.5));
-
-      const node = svg.append("g")
-        .attr("class", "nodes")
-        .selectAll("g")
-        .data(nodes)
-        .enter().append("g");
-
-      node.append("circle").attr("r", 8);
-      node.append("text").attr("x", 12).attr("y", 4).text(d => d.id);
-
-      simulation.on("tick", () => {
-        link
-          .attr("x1", d => d.source.x)
-          .attr("y1", d => d.source.y)
-          .attr("x2", d => d.target.x)
-          .attr("y2", d => d.target.y);
-
-        node.attr("transform", d => `translate(${d.x},${d.y})`);
-      });
-    }).catch(err => {
-      d3.select("#status").text("Error rendering network.");
-      console.error(err);
-    });
-  </script>
+  <script src="{{ url_for('static', filename='js/network.js') }}"></script>
 </body>
 </html>

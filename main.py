@@ -22,7 +22,7 @@ def main() -> None:
     parser.add_argument(
         "--limit",
         type=int,
-        default=5,
+        default=10,
         help="Max total postings to collect before stopping (default: 5)",
     )
     parser.add_argument(
