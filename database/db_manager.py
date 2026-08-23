@@ -8,25 +8,32 @@ from pathlib import Path
 from typing import Any
 
 SCHEMA = """
-CREATE TABLE IF NOT EXISTS job_postings (
+CREATE TABLE IF NOT EXISTS postings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL,
-    company TEXT NOT NULL,
-    salary TEXT,
+    company TEXT,
+    location TEXT,
     description TEXT NOT NULL,
-    url TEXT NOT NULL UNIQUE,
-    collected_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    url TEXT UNIQUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS skills (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT UNIQUE NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS posting_skills (
-    job_id INTEGER NOT NULL REFERENCES job_postings(id) ON DELETE CASCADE,
-    skill TEXT NOT NULL,
-    PRIMARY KEY (job_id, skill)
+    posting_id INTEGER NOT NULL,
+    skill_id INTEGER NOT NULL,
+    PRIMARY KEY (posting_id, skill_id),
+    FOREIGN KEY (posting_id) REFERENCES postings(id) ON DELETE CASCADE,
+    FOREIGN KEY (skill_id) REFERENCES skills(id) ON DELETE CASCADE
 );
 
-CREATE INDEX IF NOT EXISTS idx_posting_skills_skill ON posting_skills(skill);
+CREATE INDEX IF NOT EXISTS idx_posting_skills_posting ON posting_skills(posting_id);
+CREATE INDEX IF NOT EXISTS idx_posting_skills_skill ON posting_skills(skill_id);
 """
-
 
 class DatabaseManager:
     """Manage job data with URL-based deduplication and batch writes."""
@@ -120,46 +127,51 @@ class DatabaseManager:
         """
         return self.connection.execute(query, (min_count,)).fetchall()
 
-    def get_normalized_co_occurrences(self, min_count: int = 2) -> list[dict[str, Any]]:
-        """Calculate Jaccard Similarity weights between skill pairs.
-        
-        Jaccard = Count(A ∩ B) / (Count(A) + Count(B) - Count(A ∩ B))
-        """
+    def get_normalized_co_occurrences(self, min_count: int = 1) -> list[dict]:
+        """Compute pairwise Jaccard index for skill co-occurrences."""
         query = """
-            WITH skill_counts AS (
-                SELECT skill, COUNT(*) AS total_count
-                FROM posting_skills
-                GROUP BY skill
-            ),
-            pair_counts AS (
-                SELECT 
-                    s1.skill AS skill_a, 
-                    s2.skill AS skill_b, 
-                    COUNT(*) AS intersection_count
-                FROM posting_skills s1
-                JOIN posting_skills s2 
-                    ON s1.job_id = s2.job_id 
-                    AND s1.skill < s2.skill
-                GROUP BY s1.skill, s2.skill
-                HAVING intersection_count >= ?
-            )
+        WITH skill_counts AS (
+            SELECT skill_id, COUNT(DISTINCT posting_id) AS total_postings
+            FROM posting_skills
+            GROUP BY skill_id
+        ),
+        co_occurrences AS (
             SELECT 
-                p.skill_a,
-                p.skill_b,
-                p.intersection_count,
-                ca.total_count AS count_a,
-                cb.total_count AS count_b,
-                ROUND(
-                    CAST(p.intersection_count AS REAL) / 
-                    (ca.total_count + cb.total_count - p.intersection_count), 4
-                ) AS jaccard_index
-            FROM pair_counts p
-            JOIN skill_counts ca ON p.skill_a = ca.skill
-            JOIN skill_counts cb ON p.skill_b = cb.skill
-            ORDER BY jaccard_index DESC;
+                ps1.skill_id AS skill_a_id,
+                ps2.skill_id AS skill_b_id,
+                COUNT(DISTINCT ps1.posting_id) AS shared_postings
+            FROM posting_skills ps1
+            JOIN posting_skills ps2 
+            ON ps1.posting_id = ps2.posting_id 
+            AND ps1.skill_id < ps2.skill_id
+            GROUP BY ps1.skill_id, ps2.skill_id
+            HAVING shared_postings >= ?
+        )
+        SELECT 
+            s1.name AS skill_a,
+            s2.name AS skill_b,
+            c.shared_postings,
+            CAST(c.shared_postings AS FLOAT) / (sc1.total_postings + sc2.total_postings - c.shared_postings) AS jaccard_index
+        FROM co_occurrences c
+        JOIN skills s1 ON c.skill_a_id = s1.id
+        JOIN skills s2 ON c.skill_b_id = s2.id
+        JOIN skill_counts sc1 ON c.skill_a_id = sc1.skill_id
+        JOIN skill_counts sc2 ON c.skill_b_id = sc2.skill_id
+        ORDER BY jaccard_index DESC;
         """
-        cursor = self.connection.execute(query, (min_count,))
-        return [dict(row) for row in cursor.fetchall()]
+        cursor = self.connection.cursor()
+        cursor.execute(query, (min_count,))
+        rows = cursor.fetchall()
+        
+        return [
+            {
+                "skill_a": row[0],
+                "skill_b": row[1],
+                "shared_postings": row[2],
+                "jaccard_index": row[3],
+            }
+            for row in rows
+        ]
 
     def get_network_edge_list(self, min_jaccard: float = 0.1) -> list[tuple[str, str, float]]:
         """Return an edge list format (source, target, weight) ready for NetworkX graphs."""
@@ -169,8 +181,6 @@ class DatabaseManager:
             for row in co_occurrences
             if row["jaccard_index"] >= min_jaccard
         ]
-
-
 
 def _posting_values(posting: Any) -> dict[str, str | None]:
     """Read posting fields from a mapping or an object with matching attributes."""
