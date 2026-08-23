@@ -37,11 +37,14 @@ def export_d3_network(
     json_path.write_text(json.dumps({"nodes": nodes, "links": links}, indent=2))
     print(f"Exported graph data: {json_path.resolve()}")
 
-    # Copy HTML template from visualization/templates/
+    # Copy HTML template and its static assets from visualization/
     template_src = Path(__file__).parent / "templates" / "network.html"
     if template_src.exists():
         template_dest = out_dir / "network.html"
         shutil.copy(template_src, template_dest)
+        shutil.copytree(
+            Path(__file__).parent / "static", out_dir / "static", dirs_exist_ok=True
+        )
         print(f"Copied visualization template: {template_dest.resolve()}")
 
 

@@ -1,6 +1,7 @@
 """Run a small scrape from the command line."""
 
 import argparse
+
 from playwright.sync_api import sync_playwright
 
 from config import DATABASE_PATH, get_site_config

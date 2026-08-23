@@ -11,3 +11,5 @@ venv/
 .mypy_cache/
 .ruff_cache/
 /.history
+.vscode/settings.json
+output/

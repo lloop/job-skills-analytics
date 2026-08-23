@@ -1,0 +1,42 @@
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: #0f172a;
+  color: #f8fafc;
+  font-family: sans-serif;
+}
+
+#controls {
+  position: absolute;
+  top: 15px;
+  left: 15px;
+  background: rgba(30, 41, 59, 0.9);
+  padding: 12px;
+  border-radius: 8px;
+  z-index: 10;
+  border: 1px solid #334155;
+}
+
+svg {
+  width: 100vw;
+  height: 100vh;
+  display: block;
+}
+
+.links line {
+  stroke: #64748b;
+  stroke-opacity: 0.6;
+}
+
+.nodes circle {
+  fill: #38bdf8;
+  stroke: #0284c7;
+  stroke-width: 2px;
+}
+
+.nodes text {
+  fill: #f1f5f9;
+  font-size: 12px;
+  pointer-events: none;
+}
