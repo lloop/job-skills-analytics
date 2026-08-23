@@ -40,3 +40,9 @@ svg {
   font-size: 12px;
   pointer-events: none;
 }
+
+.thumbnail-container {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+}

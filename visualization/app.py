@@ -4,7 +4,7 @@ from pathlib import Path
 
 from flask import Flask, jsonify, render_template, request
 
-from config import DATABASE_PATH
+from config import DATABASE_PATH, SITE_CONFIGS
 from database.db_manager import DatabaseManager
 
 app = Flask(
@@ -13,10 +13,20 @@ app = Flask(
 )
 
 
+# @app.route("/")
+# def index():
+#     """Render the main D3 network graph dashboard."""
+#     return render_template("network.html")
+
 @app.route("/")
 def index():
-    """Render the main D3 network graph dashboard."""
-    return render_template("network.html")
+    site_config = SITE_CONFIGS.get("remoteok")
+    print(site_config)
+    listing_page = site_config.listing_url
+
+    title = "Welcome to My Flask App!"
+    greeting = "Hello, World!"
+    return render_template("index.html", title=title, greeting=greeting, listing_page=listing_page)
 
 
 @app.route("/api/graph")

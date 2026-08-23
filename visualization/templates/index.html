@@ -1,0 +1,42 @@
+<!-- <!DOCTYPE html>
+<html>
+  <head>
+    <title>{{ title }}</title>
+  </head>
+  <body>
+    <h1>Welcome to My Flask App!</h1>
+    <p>{{ greeting }}</p>
+  </body>
+</html> -->
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Skill Co-occurrence Network</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <link rel="stylesheet" href="static/jobs-skills.css">
+</head>
+<body>
+
+    <h1>Welcome to My Flask App!</h1>
+    <p>{{ greeting }}</p>
+    <title>{{ title }}</title>
+
+  <div id="controls">
+    <h3>Skill Network</h3>
+    <p id="status">Loading graph data...</p>
+  </div>
+
+  <div class="thumbnail-container">
+    <a href="{{ listing_url }}">
+      <img src="/path/to/thumbnail.jpg" alt="Listings Thumbnail" />
+    </a>
+  </div>
+
+  <svg id="network-svg"></svg>
+
+  <script src="static/jobs-skills.js"></script>
+</body>
+</html>
