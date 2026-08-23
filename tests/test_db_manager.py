@@ -1,4 +1,7 @@
+import sqlite3
+import tempfile
 import unittest
+from pathlib import Path
 
 from database.db_manager import DatabaseManager, _posting_values
 from scraper.parser import JobPosting
@@ -158,6 +161,46 @@ class TestDatabaseManager(unittest.TestCase):
             if set([r["skill_a"], r["skill_b"]]) == {"aws", "python"}
         )
         self.assertEqual(aws_python_pair["jaccard_index"], 0.5)
+
+
+class TestLegacySchemaMigration(unittest.TestCase):
+
+    def setUp(self) -> None:
+        self.db_path = Path(tempfile.mkdtemp()) / "jobs.sqlite3"
+
+    def test_created_at_column_is_renamed(self) -> None:
+        """Verify a database using the old created_at column is migrated in place."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """CREATE TABLE postings (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    url TEXT UNIQUE NOT NULL,
+                    title TEXT NOT NULL,
+                    company TEXT NOT NULL,
+                    salary TEXT,
+                    description TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )"""
+            )
+            conn.execute(
+                "INSERT INTO postings (url, title, company, description)"
+                " VALUES ('https://ex.com/1', 'Dev', 'Co', 'Desc')"
+            )
+
+        with DatabaseManager(self.db_path) as db:
+            posting = JobPosting("Dev", "Co", None, "Desc", "https://ex.com/1")
+            db.upsert_posting(posting, skills=["python"])
+            row = db.fetch_posting("https://ex.com/1")
+
+        self.assertIsNotNone(row["collected_at"])
+
+    def test_unmigratable_schema_raises(self) -> None:
+        """Verify an unrecognized postings table fails with an actionable message."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("CREATE TABLE postings (id INTEGER PRIMARY KEY, url TEXT)")
+
+        with self.assertRaisesRegex(sqlite3.OperationalError, "delete the database file"):
+            DatabaseManager(self.db_path)
 
 
 if __name__ == "__main__":
