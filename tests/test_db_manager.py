@@ -1,4 +1,5 @@
 import unittest
+
 from database.db_manager import DatabaseManager, _posting_values
 from scraper.parser import JobPosting
 
@@ -23,14 +24,15 @@ class TestDatabaseManager(unittest.TestCase):
         self.db.close()
 
     def test_schema_initialization(self) -> None:
-        """Verify job_postings, posting_skills, and index are initialized."""
+        """Verify postings, skills, and posting_skills tables are initialized."""
         cursor = self.db.connection.cursor()
         cursor.execute(
             "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;"
         )
         tables = [row["name"] for row in cursor.fetchall()]
 
-        self.assertIn("job_postings", tables)
+        self.assertIn("postings", tables)
+        self.assertIn("skills", tables)
         self.assertIn("posting_skills", tables)
 
     def test_upsert_posting_inserts_new_record_and_skills(self) -> None:
@@ -45,12 +47,8 @@ class TestDatabaseManager(unittest.TestCase):
         self.assertEqual(row["title"], "Backend Engineer")
         self.assertEqual(row["company"], "TechCorp")
 
-        # Check skills table (empty skill "" should be ignored)
-        cursor = self.db.connection.execute(
-            "SELECT skill FROM posting_skills WHERE job_id = ? ORDER BY skill", (job_id,)
-        )
-        skills = [r["skill"] for r in cursor.fetchall()]
-        self.assertEqual(skills, ["docker", "python"])
+        # Check linked skills (empty skill "" should be ignored)
+        self.assertEqual(self.db.fetch_skills(job_id), ["docker", "python"])
 
     def test_upsert_posting_updates_existing_record_and_replaces_skills(self) -> None:
         """Verify ON CONFLICT(url) updates posting details and replaces old skills."""
@@ -76,11 +74,7 @@ class TestDatabaseManager(unittest.TestCase):
         self.assertEqual(row["salary"], "$140,000")
 
         # Skills should be replaced with new set
-        cursor = self.db.connection.execute(
-            "SELECT skill FROM posting_skills WHERE job_id = ? ORDER BY skill", (job_id_2,)
-        )
-        skills = [r["skill"] for r in cursor.fetchall()]
-        self.assertEqual(skills, ["fastapi", "python"])
+        self.assertEqual(self.db.fetch_skills(job_id_2), ["fastapi", "python"])
 
     def test_upsert_postings_batch(self) -> None:
         """Verify batch upserting multiple postings."""
@@ -100,7 +94,7 @@ class TestDatabaseManager(unittest.TestCase):
         processed_count = self.db.upsert_postings(batch)
         self.assertEqual(processed_count, 2)
 
-        cursor = self.db.connection.execute("SELECT COUNT(*) as count FROM job_postings")
+        cursor = self.db.connection.execute("SELECT COUNT(*) as count FROM postings")
         self.assertEqual(cursor.fetchone()["count"], 2)
 
     def test_context_manager(self) -> None:
@@ -154,7 +148,7 @@ class TestDatabaseManager(unittest.TestCase):
             r for r in results 
             if set([r["skill_a"], r["skill_b"]]) == {"docker", "python"}
         )
-        self.assertEqual(top_pair["intersection_count"], 2)
+        self.assertEqual(top_pair["shared_postings"], 2)
         self.assertEqual(top_pair["jaccard_index"], 1.0)
 
         # 'aws' and 'python': Intersection = 1, Total(aws)=1, Total(python)=2

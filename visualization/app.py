@@ -1,6 +1,7 @@
 """Flask application serving interactive skill network visualization."""
 
 from pathlib import Path
+
 from flask import Flask, jsonify, render_template, request
 
 from config import DATABASE_PATH

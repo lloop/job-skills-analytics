@@ -1,14 +1,19 @@
 """Scraping pipeline orchestration."""
 
-from collections.abc import Iterable
+from collections.abc import Generator
 from urllib.parse import urljoin
 
-from playwright.sync_api import Page, TimeoutError as PlaywrightTimeoutError
+from playwright.sync_api import Page
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
-from config import REQUEST_TIMEOUT_MS, SCROLL_PAUSE_SECONDS
-from config import SiteConfig, get_site_config
+from config import (
+    REQUEST_TIMEOUT_MS,
+    SCROLL_PAUSE_SECONDS,
+    SiteConfig,
+    get_site_config,
+)
+
 from .parser import JobPosting, parse_job_posting
-from collections.abc import Generator
 
 
 def collect_postings(
@@ -49,9 +54,7 @@ def collect_postings(
                     timeout=REQUEST_TIMEOUT_MS,
                 )
                 _wait_for_selector(detail_page, site.detail_ready_selector)
-                posting = parse_job_posting(detail_page, site)
-                if posting:
-                    yield posting
+                yield parse_job_posting(detail_page, site)
             except Exception as err:
                 print(f"[WARNING] Failed to scrape {posting_url}: {err}")
             finally:
@@ -64,15 +67,14 @@ def collect_postings(
             continue
         if not _load_more_results(page, site, links_before):
             break
-        
+
+
 def _job_urls(page: Page, site: SiteConfig) -> list[str]:
     """Return normalized posting URLs currently visible in the listing."""
-
     urls: list[str] = []
 
-    for job_element in page.locator("tr.job[data-href]").all():
-        href = job_element.get_attribute("data-href")
-        
+    for job_element in page.locator(site.job_link_selector).all():
+        href = job_element.get_attribute("data-href") or job_element.get_attribute("href")
         if href:
             urls.append(urljoin(page.url, href))
 

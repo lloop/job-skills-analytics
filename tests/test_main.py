@@ -105,7 +105,7 @@ class TestMain(unittest.TestCase):
         mock_collect_postings.return_value = mock_gen
 
         with patch("sys.argv", test_args):
-            with self.assertRaises(Exception):
+            with self.assertRaisesRegex(Exception, "Scraping loop failed"):
                 main.main()
 
         # Ensure generator was still explicitly closed before browser context closed

@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 from config import SiteConfig
 from scraper.parser import JobPosting

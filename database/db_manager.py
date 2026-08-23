@@ -1,4 +1,4 @@
-"""Standalone SQLite storage for job postings and parsed skills."""
+"""SQLite storage for job postings and their skills."""
 
 from __future__ import annotations
 
@@ -7,38 +7,15 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS postings (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT NOT NULL,
-    company TEXT,
-    location TEXT,
-    description TEXT NOT NULL,
-    url TEXT UNIQUE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+SCHEMA_PATH = Path(__file__).with_name("schema.sql")
+SCHEMA = SCHEMA_PATH.read_text()
 
-CREATE TABLE IF NOT EXISTS skills (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT UNIQUE NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS posting_skills (
-    posting_id INTEGER NOT NULL,
-    skill_id INTEGER NOT NULL,
-    PRIMARY KEY (posting_id, skill_id),
-    FOREIGN KEY (posting_id) REFERENCES postings(id) ON DELETE CASCADE,
-    FOREIGN KEY (skill_id) REFERENCES skills(id) ON DELETE CASCADE
-);
-
-CREATE INDEX IF NOT EXISTS idx_posting_skills_posting ON posting_skills(posting_id);
-CREATE INDEX IF NOT EXISTS idx_posting_skills_skill ON posting_skills(skill_id);
-"""
 
 class DatabaseManager:
     """Manage job data with URL-based deduplication and batch writes."""
 
     def __init__(self, database_path: str | Path = "jobs.sqlite3") -> None:
+        Path(database_path).parent.mkdir(parents=True, exist_ok=True)
         self.connection = sqlite3.connect(database_path)
         self.connection.row_factory = sqlite3.Row
         self.connection.execute("PRAGMA foreign_keys = ON")
@@ -53,29 +30,37 @@ class DatabaseManager:
         """Insert or update one posting, returning its database ID."""
         posting_data = _posting_values(posting)
         with self.connection:
-            job_id = self._upsert(posting_data)
-            self._replace_skills(job_id, skills)
-        return job_id
-
-    def add_posting(self, posting: Any, skills: Iterable[str] = ()) -> int:
-        """Backward-compatible alias for :meth:`upsert_posting`."""
-        return self.upsert_posting(posting, skills)
+            posting_id = self._upsert(posting_data)
+            self._replace_skills(posting_id, skills)
+        return posting_id
 
     def upsert_postings(self, postings: Iterable[tuple[Any, Iterable[str]]]) -> int:
         """Upsert a batch and return the number of processed postings."""
         processed = 0
         with self.connection:
             for posting, skills in postings:
-                job_id = self._upsert(_posting_values(posting))
-                self._replace_skills(job_id, skills)
+                posting_id = self._upsert(_posting_values(posting))
+                self._replace_skills(posting_id, skills)
                 processed += 1
         return processed
 
     def fetch_posting(self, url: str) -> sqlite3.Row | None:
         """Return the posting for a URL, or ``None`` when it is missing."""
         return self.connection.execute(
-            "SELECT * FROM job_postings WHERE url = ?", (url,)
+            "SELECT * FROM postings WHERE url = ?", (url,)
         ).fetchone()
+
+    def fetch_skills(self, posting_id: int) -> list[str]:
+        """Return the skill names linked to a posting, sorted alphabetically."""
+        rows = self.connection.execute(
+            """SELECT s.name
+            FROM posting_skills ps
+            JOIN skills s ON s.id = ps.skill_id
+            WHERE ps.posting_id = ?
+            ORDER BY s.name""",
+            (posting_id,),
+        ).fetchall()
+        return [row["name"] for row in rows]
 
     def close(self) -> None:
         """Close the SQLite connection."""
@@ -89,7 +74,7 @@ class DatabaseManager:
 
     def _upsert(self, posting: dict[str, str | None]) -> int:
         cursor = self.connection.execute(
-            """INSERT INTO job_postings (title, company, salary, description, url)
+            """INSERT INTO postings (title, company, salary, description, url)
             VALUES (:title, :company, :salary, :description, :url)
             ON CONFLICT(url) DO UPDATE SET
                 title = excluded.title,
@@ -102,33 +87,42 @@ class DatabaseManager:
         )
         return int(cursor.fetchone()["id"])
 
-    def _replace_skills(self, job_id: int, skills: Iterable[str]) -> None:
-        self.connection.execute("DELETE FROM posting_skills WHERE job_id = ?", (job_id,))
-        unique_skills = {(skill.strip(),) for skill in skills if skill and skill.strip()}
-        self.connection.executemany(
-            "INSERT INTO posting_skills (job_id, skill) VALUES (?, ?)",
-            [(job_id, skill) for skill, in unique_skills],
+    def _replace_skills(self, posting_id: int, skills: Iterable[str]) -> None:
+        self.connection.execute(
+            "DELETE FROM posting_skills WHERE posting_id = ?", (posting_id,)
         )
-            
+        unique_skills = {normalize_skill(skill) for skill in skills if normalize_skill(skill)}
+        self.connection.executemany(
+            "INSERT OR IGNORE INTO skills (name) VALUES (?)",
+            [(skill,) for skill in unique_skills],
+        )
+        self.connection.executemany(
+            """INSERT OR IGNORE INTO posting_skills (posting_id, skill_id)
+            SELECT ?, id FROM skills WHERE name = ?""",
+            [(posting_id, skill) for skill in unique_skills],
+        )
+
     def get_skill_co_occurrences(self, min_count: int = 2) -> list[sqlite3.Row]:
-        """Fetch raw co-occurrence counts for skill pairs appearing together at least `min_count` times."""
+        """Fetch co-occurrence counts for pairs seen together at least `min_count` times."""
         query = """
-            SELECT 
-                s1.skill AS skill_a, 
-                s2.skill AS skill_b, 
+            SELECT
+                s1.name AS skill_a,
+                s2.name AS skill_b,
                 COUNT(*) AS pair_count
-            FROM posting_skills s1
-            JOIN posting_skills s2 
-                ON s1.job_id = s2.job_id 
-                AND s1.skill < s2.skill
-            GROUP BY s1.skill, s2.skill
+            FROM posting_skills ps1
+            JOIN posting_skills ps2
+                ON ps1.posting_id = ps2.posting_id
+                AND ps1.skill_id < ps2.skill_id
+            JOIN skills s1 ON s1.id = ps1.skill_id
+            JOIN skills s2 ON s2.id = ps2.skill_id
+            GROUP BY s1.name, s2.name
             HAVING pair_count >= ?
             ORDER BY pair_count DESC;
         """
         return self.connection.execute(query, (min_count,)).fetchall()
 
-    def get_normalized_co_occurrences(self, min_count: int = 1) -> list[dict]:
-        """Compute pairwise Jaccard index for skill co-occurrences."""
+    def get_normalized_co_occurrences(self, min_count: int = 1) -> list[dict[str, Any]]:
+        """Compute the pairwise Jaccard index for skill co-occurrences."""
         query = """
         WITH skill_counts AS (
             SELECT skill_id, COUNT(DISTINCT posting_id) AS total_postings
@@ -136,22 +130,23 @@ class DatabaseManager:
             GROUP BY skill_id
         ),
         co_occurrences AS (
-            SELECT 
+            SELECT
                 ps1.skill_id AS skill_a_id,
                 ps2.skill_id AS skill_b_id,
                 COUNT(DISTINCT ps1.posting_id) AS shared_postings
             FROM posting_skills ps1
-            JOIN posting_skills ps2 
-            ON ps1.posting_id = ps2.posting_id 
-            AND ps1.skill_id < ps2.skill_id
+            JOIN posting_skills ps2
+                ON ps1.posting_id = ps2.posting_id
+                AND ps1.skill_id < ps2.skill_id
             GROUP BY ps1.skill_id, ps2.skill_id
             HAVING shared_postings >= ?
         )
-        SELECT 
+        SELECT
             s1.name AS skill_a,
             s2.name AS skill_b,
             c.shared_postings,
-            CAST(c.shared_postings AS FLOAT) / (sc1.total_postings + sc2.total_postings - c.shared_postings) AS jaccard_index
+            CAST(c.shared_postings AS FLOAT)
+                / (sc1.total_postings + sc2.total_postings - c.shared_postings) AS jaccard_index
         FROM co_occurrences c
         JOIN skills s1 ON c.skill_a_id = s1.id
         JOIN skills s2 ON c.skill_b_id = s2.id
@@ -159,22 +154,11 @@ class DatabaseManager:
         JOIN skill_counts sc2 ON c.skill_b_id = sc2.skill_id
         ORDER BY jaccard_index DESC;
         """
-        cursor = self.connection.cursor()
-        cursor.execute(query, (min_count,))
-        rows = cursor.fetchall()
-        
-        return [
-            {
-                "skill_a": row[0],
-                "skill_b": row[1],
-                "shared_postings": row[2],
-                "jaccard_index": row[3],
-            }
-            for row in rows
-        ]
+        rows = self.connection.execute(query, (min_count,)).fetchall()
+        return [dict(row) for row in rows]
 
     def get_network_edge_list(self, min_jaccard: float = 0.1) -> list[tuple[str, str, float]]:
-        """Return an edge list format (source, target, weight) ready for NetworkX graphs."""
+        """Return an edge list (source, target, weight) ready for graph rendering."""
         co_occurrences = self.get_normalized_co_occurrences(min_count=1)
         return [
             (row["skill_a"], row["skill_b"], row["jaccard_index"])
@@ -182,12 +166,20 @@ class DatabaseManager:
             if row["jaccard_index"] >= min_jaccard
         ]
 
+
+def normalize_skill(skill: str) -> str:
+    """Return the canonical stored form of a skill name."""
+    return skill.strip().lower()
+
+
 def _posting_values(posting: Any) -> dict[str, str | None]:
     """Read posting fields from a mapping or an object with matching attributes."""
     if isinstance(posting, Mapping):
-        get_value = posting.get
+        def get_value(key: str) -> Any:
+            return posting.get(key)
     else:
-        get_value = lambda key, default=None: getattr(posting, key, default)
+        def get_value(key: str) -> Any:
+            return getattr(posting, key, None)
 
     values = {
         "title": get_value("title"),

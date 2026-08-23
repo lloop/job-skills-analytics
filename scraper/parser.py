@@ -6,7 +6,6 @@ from playwright.sync_api import Page
 
 from config import SiteConfig
 
-from playwright.sync_api import Locator, Page
 
 @dataclass
 class JobPosting:
@@ -33,10 +32,8 @@ def parse_job_posting(page: Page, site: SiteConfig | None = None) -> JobPosting:
         tags_selector=".action-add-tag h3, .tag h3",
     )
 
-    # Extract tags directly using the selector
-    tags_selector = getattr(selectors, "tags_selector", ".action-add-tag h3, .tag h3")
-    raw_tags = page.locator(tags_selector).all_inner_texts()
-    cleaned_tags = tuple(dict.fromkeys(t.strip() for t in raw_tags if t.strip()))
+    raw_tags = page.locator(selectors.tags_selector).all_inner_texts()
+    cleaned_tags = tuple(dict.fromkeys(tag.strip() for tag in raw_tags if tag.strip()))
 
     return JobPosting(
         title=page.locator(selectors.title_selector).first.inner_text().strip(),
@@ -47,23 +44,7 @@ def parse_job_posting(page: Page, site: SiteConfig | None = None) -> JobPosting:
         tags=cleaned_tags,
     )
 
+
 def _optional_text(page: Page, selector: str) -> str | None:
     locator = page.locator(selector).first
     return locator.inner_text().strip() if locator.count() else None
-
-
-# def extract_job_tags(context: Page | Locator) -> tuple[str, ...]:
-#     """Extract tag strings from elements matching `.action-add-tag h3` or `.tag h3`.
-
-#     Works on either a full `page` or a scoped row `locator`.
-#     """
-#     tag_elements = context.locator(".action-add-tag h3, .tag h3").all()
-
-#     tags: list[str] = []
-#     for el in tag_elements:
-#         text = el.inner_text().strip()
-#         if text:
-#             tags.append(text)
-
-#     # Deduplicate while preserving order
-#     return tuple(dict.fromkeys(tags))
