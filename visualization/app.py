@@ -1,13 +1,10 @@
 """Flask application serving interactive skill network visualization."""
 
 from pathlib import Path
-import site
 from flask import Flask, jsonify, render_template, request
 
 from config import DATABASE_PATH
 from database.db_manager import DatabaseManager
-
-from config import SITE_CONFIGS
 
 app = Flask(
     __name__,
@@ -15,11 +12,11 @@ app = Flask(
 )
 
 
-@app.route('/')
+@app.route("/")
 def index():
-    site = SITE_CONFIGS["remoteok"]
-    base_url = site.listing_url
-    return render_template('network.html', base_url=base_url)
+    """Render the main D3 network graph dashboard."""
+    return render_template("network.html")
+
 
 @app.route("/api/graph")
 def get_graph_data():
