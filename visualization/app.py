@@ -19,8 +19,7 @@ def index():
     listing_page = site_config.listing_url
 
     title = "Job Skills Network"
-    descrip = "Job Skills Associations From Remote OK.com!"
-    greeting = "Hello, World!"
+    descrip = "Job Skills Associations From RemoteOK.com"
     return render_template("index.html", title=title, descrip=descrip, listing_page=listing_page)
 
 
