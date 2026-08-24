@@ -67,12 +67,46 @@ d3.json("/api/graph?min_jaccard=0.0").then(graph => {
     .enter().append("line")
     .attr("stroke-width", d => Math.max((d.value || d.weight || 1) * 5, 1.5));
 
+  // const node = g.append("g")
+  //   .attr("class", "nodes")
+  //   .selectAll("g")
+  //   .data(nodes)
+  //   .enter().append("g")
+  //   .call(drag(simulation));
+
   const node = g.append("g")
     .attr("class", "nodes")
     .selectAll("g")
     .data(nodes)
     .enter().append("g")
-    .call(drag(simulation));
+    .call(drag(simulation))
+    .on("pointerenter", (event, d) => {
+      // 1. Build a Set of connected neighbor IDs
+      const connectedNodeIds = new Set([d.id]);
+      
+      link.classed("active-link", l => {
+        const sourceId = l.source.id || l.source;
+        const targetId = l.target.id || l.target;
+        if (sourceId === d.id || targetId === d.id) {
+          connectedNodeIds.add(sourceId);
+          connectedNodeIds.add(targetId);
+          return true;
+        }
+        return false;
+      });
+
+      // 2. Mark connected node elements
+      node.classed("active-neighbor", n => connectedNodeIds.has(n.id));
+
+      // 3. Enable highlighting mode on the parent SVG container
+      svg.classed("highlighting", true);
+    })
+    .on("pointerleave", () => {
+      // Reset all classes
+      svg.classed("highlighting", false);
+      node.classed("active-neighbor", false);
+      link.classed("active-link", false);
+    });
 
   node.append("circle")
     .attr("r", d => radiusScale(d.degree));

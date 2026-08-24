@@ -141,3 +141,21 @@ svg {
   z-index: 10;
   pointer-events: none;
 }
+
+/* Dimming transitions */
+.links line,
+.nodes g {
+  transition: opacity 0.2s ease;
+}
+
+/* Dim all elements when hovering */
+svg.highlighting .links line,
+svg.highlighting .nodes g {
+  opacity: 0.15;
+}
+
+/* Keep hovered node, neighbor nodes, and connecting links fully visible */
+svg.highlighting .nodes g.active-neighbor,
+svg.highlighting .links line.active-link {
+  opacity: 1;
+}
