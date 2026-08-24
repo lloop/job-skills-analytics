@@ -16,13 +16,12 @@ app = Flask(
 @app.route("/")
 def index():
     site_config = SITE_CONFIGS["remoteok"]
-    # print(site_config)
     listing_page = site_config.listing_url
 
-    title = "Welcome to My Flask App!"
+    title = "Job Skills Network"
+    descrip = "Job Skills Associations From Remote OK.com!"
     greeting = "Hello, World!"
-    return render_template("index.html", title=title, greeting=greeting, listing_page=listing_page)
-    # return render_template("index.html")
+    return render_template("index.html", title=title, descrip=descrip, listing_page=listing_page)
 
 
 @app.route("/api/graph")

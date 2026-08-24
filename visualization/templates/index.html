@@ -2,19 +2,22 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Skill Co-occurrence Network</title>
+  <title>{{ title }}</title>
   <script src="https://d3js.org/d3.v7.min.js"></script>
   <link rel="stylesheet" href="static/jobs-skills.css">
 </head>
 <body>
 
-    <!-- <h1>Welcome to My Flask App!</h1>
-    <p>{{ greeting }}</p>
-    <title>{{ title }}</title> -->
+  <h1 id="page-descrip">{{ descrip }}</h1>
 
   <div id="controls">
     <h3>Skill Network</h3>
     <p id="status">Loading graph data...</p>
+
+    <div class="slider-group">
+      <label for="charge-slider">Node spacing</label>
+      <input type="range" id="charge-slider" min="50" max="1000" step="10" value="800">
+    </div>
   </div>
 
   <div class="thumbnail-container">

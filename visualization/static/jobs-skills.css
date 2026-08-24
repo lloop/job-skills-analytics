@@ -33,6 +33,13 @@ svg {
   fill: #38bdf8;
   stroke: #0284c7;
   stroke-width: 2px;
+  transition: fill 0.15s ease, stroke 0.15s ease;
+  cursor: pointer;
+}
+
+.nodes circle:hover {
+  fill: #d97757;
+  stroke: #b85c3f;
 }
 
 .nodes text {
@@ -94,4 +101,43 @@ svg {
 .thumbnail-desc {
   font-size: 0.75rem;
   color: #94a3b8;
+}
+
+.slider-group {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.slider-group label {
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+
+.slider-group input[type="range"] {
+  width: 180px;
+  accent-color: #38bdf8;
+  background: transparent;
+}
+
+#page-descrip {
+  position: absolute;
+  top: 15px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: fit-content;
+  max-width: 80%;
+  text-align: center;
+  margin: 0;
+  padding: 10px 20px;
+  /* font-size: 1rem;
+  font-weight: 500; */
+  color: #f8fafc;
+  background: rgba(30, 41, 59, 0.9);
+  border: 1px solid #334155;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  z-index: 10;
+  pointer-events: none;
 }

@@ -50,9 +50,13 @@ d3.json("/api/graph?min_jaccard=0.0").then(graph => {
 
   status.text(`Loaded ${nodes.length} skills & ${links.length} connections.`);
 
+  // read starting charge from the slider's HTML value attribute
+  const chargeSlider = d3.select("#charge-slider");
+  const initialCharge = +chargeSlider.property("value");
+
   const simulation = d3.forceSimulation(nodes)
     .force("link", d3.forceLink(links).id(d => d.id).distance(120))
-    .force("charge", d3.forceManyBody().strength(-300))
+    .force("charge", d3.forceManyBody().strength(-initialCharge))   // was -300
     .force("center", d3.forceCenter(width / 2, height / 2))
     .force("collide", d3.forceCollide(d => radiusScale(d.degree) + 2));
 
@@ -87,6 +91,13 @@ d3.json("/api/graph?min_jaccard=0.0").then(graph => {
 
     node.attr("transform", d => `translate(${d.x},${d.y})`);
   });
+
+  chargeSlider.on("input", function() {
+    const value = +this.value;
+    simulation.force("charge").strength(-value);
+    simulation.alpha(0.5).restart();
+  });
+  
 }).catch(err => {
   d3.select("#status").text("Error rendering network.");
   console.error(err);
