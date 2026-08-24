@@ -42,7 +42,56 @@ svg {
 }
 
 .thumbnail-container {
-  position: absolute;
-  top: 10px;
-  right: 10px;
+  position: fixed;
+  top: 15px;
+  right: 15px;
+  z-index: 10;
+}
+
+.thumbnail-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(30, 41, 59, 0.9);
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 10px 14px;
+  text-decoration: none;
+  color: #f8fafc;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  transition: box-shadow 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
+  max-width: 260px;
+}
+
+.thumbnail-link:hover {
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+  transform: translateY(-1px);
+  border-color: #38bdf8;
+}
+
+.thumbnail-image {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #38bdf8;
+}
+
+.thumbnail-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.3;
+}
+
+.thumbnail-title {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #f8fafc;
+}
+
+.thumbnail-desc {
+  font-size: 0.75rem;
+  color: #94a3b8;
 }

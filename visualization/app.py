@@ -13,20 +13,16 @@ app = Flask(
 )
 
 
-# @app.route("/")
-# def index():
-#     """Render the main D3 network graph dashboard."""
-#     return render_template("network.html")
-
 @app.route("/")
 def index():
-    site_config = SITE_CONFIGS.get("remoteok")
-    print(site_config)
+    site_config = SITE_CONFIGS["remoteok"]
+    # print(site_config)
     listing_page = site_config.listing_url
 
     title = "Welcome to My Flask App!"
     greeting = "Hello, World!"
     return render_template("index.html", title=title, greeting=greeting, listing_page=listing_page)
+    # return render_template("index.html")
 
 
 @app.route("/api/graph")
