@@ -22,9 +22,27 @@ class DatabaseManager:
         self.initialize()
 
     def initialize(self) -> None:
-        """Create the database schema if it does not already exist."""
+        """Create the database schema, migrating pre-existing databases if needed."""
         with self.connection:
+            self._migrate_legacy_schema()
             self.connection.executescript(SCHEMA)
+
+    def _migrate_legacy_schema(self) -> None:
+        """Bring databases written by older schema versions up to date."""
+        columns = self._columns("postings")
+        if columns and "collected_at" not in columns:
+            if "created_at" not in columns:
+                raise sqlite3.OperationalError(
+                    "The 'postings' table predates the current schema and cannot be "
+                    "migrated automatically; delete the database file and re-scrape."
+                )
+            self.connection.execute(
+                "ALTER TABLE postings RENAME COLUMN created_at TO collected_at"
+            )
+
+    def _columns(self, table: str) -> set[str]:
+        rows = self.connection.execute(f"PRAGMA table_info({table})").fetchall()
+        return {row["name"] for row in rows}
 
     def upsert_posting(self, posting: Any, skills: Iterable[str] = ()) -> int:
         """Insert or update one posting, returning its database ID."""
